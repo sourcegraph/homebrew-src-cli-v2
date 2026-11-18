@@ -1,0 +1,45 @@
+name: ci
+
+# Checks the formula on every platform it supports. The release script in the
+# Sourcegraph monorepo commits Formula/src-cli.rb straight to main, so this
+# runs after each publish and reports a formula that does not install.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'Formula/**'
+  pull_request:
+    paths:
+      - 'Formula/**'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  formula:
+    name: src-cli on ${{ matrix.runner }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        runner:
+          - macos-latest # arm64
+          - macos-15-intel # x86_64
+          - ubuntu-latest # x86_64
+          - ubuntu-24.04-arm # arm64
+    steps:
+      # setup-homebrew taps this checkout as sourcegraph/src-cli-v2.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: Homebrew/actions/setup-homebrew@ceec4e8419bb3c97ce96e9dda7738499ed5f869d # main
+      # Homebrew refuses to load formulae from non-official taps until trusted.
+      - name: Trust tap
+        run: brew trust sourcegraph/src-cli-v2
+      - name: Audit
+        run: brew audit --strict --online --formula sourcegraph/src-cli-v2/src-cli
+      - name: Install
+        run: brew install sourcegraph/src-cli-v2/src-cli
+      - name: Test
+        run: brew test sourcegraph/src-cli-v2/src-cli
